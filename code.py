@@ -1,3 +1,347 @@
+class ResumeXmlHandler(xml.sax.ContentHandler):
+
+        def __init__(self):
+                self.node = ''
+                self.params = {}
+                self.error = None
+        def startElement(self, name, attrs):
+                self.node = name
+        def endElement(self, name):
+                self.node = ''
+        def characters(self,content):
+                if self.node == 'Summary':
+                        for dirty in ['Work Sumamry','WORK SUMMARY','Summary','Professional Summary','PROFESSIONAL','Professional:','PROFESSIONAL:','PROFESSIONAL :','PROFESSIONAL SUMMARY:','Professional summary','SUMMARY','PROFESSIONAL SUMMARY','SUMMARY:','EXECUTIVE SUMMARY']:
+                                if dirty in content:
+                                        content=content.replace(dirty,'')
+                        if self.params.has_key(self.node.lower()):
+                                self.params[self.node.lower()] += _my_unescape(content)
+                        else:
+                                self.params[self.node.lower()] = _my_unescape(content)
+                else:
+                        content=content.strip()
+
+                if self.node == 'ResumeFileName':
+                        self.params['resumefilename'] = _my_unescape(content)
+                elif self.node == 'FirstName':
+                        self.params[self.node.lower()] = _my_unescape(content)
+                elif self.node == 'LastName':
+                        self.params[self.node.lower()] = _my_unescape(content)
+                elif self.node == 'Email':
+                        for dirty in ['E-mail-','-',':-',':',' ']:
+                                if dirty in content:
+                                        content=content.split(dirty)[1]
+                        self.params[self.node.lower()] = _my_unescape(content.strip())
+                elif self.node == 'Phone' or self.node == 'Mobile' or self.node == 'FormattedPhone' or self.node =='FormattedMobile':
+                        content=content.replace(' ','')
+                        if len(content)>10:
+                                self.params[self.node.lower()] = _my_unescape(content)[-10:]
+                        elif len(content)<10:
+                                pass
+                        else:
+                                self.params[self.node.lower()] = _my_unescape(content)
+                elif self.node == 'Address':
+                        self.params[self.node.lower()] = _my_unescape(content)
+                elif self.node == 'City':
+                        self.params[self.node.lower()] = _my_unescape(content)
+                elif self.node == 'State':
+                        self.params[self.node.lower()] = _my_unescape(content)
+                elif self.node == 'ZipCode':
+                        self.params['pincode'] = _my_unescape(content)
+                elif self.node == 'Skill':
+                        skill_list = _my_unescape(content).replace('\n', ',').replace('\r', '').split(',')
+                        labels = ['language', 'frameworks', 'tools', 'operating systems','training','analysis','module','user interface','programming','trouble shooting','capability','specifications','platforms','modules','cleanliness','assembly']
+                        self.params['claimed_skills'] = ''
+                        for skill in skill_list:
+                                skill = skill.strip()
+                                if skill.lower() not in labels:
+                                        self.params['claimed_skills'] += 's_%s,'%skill
+                # candidate profile fields
+                elif self.node == 'Gender':
+                        gender_dict={'Female':'F',
+                                     'Male':'M',
+                                     'Other':'O'
+                                    }
+                        gender=_my_unescape(content)
+      
+                        if gender in gender_dict.keys():
+                                self.params[self.node.lower()] = gender_dict[gender]
+                elif self.node =='DateOfBirth':
+                        self.params[self.node.lower()] = _parse_date(_my_unescape(content))
+                elif self.node == 'LicenseNo':
+                        self.params[self.node.lower()] = _my_unescape(content)
+                elif self.node == 'Nationality':
+                        self.params[self.node.lower()] = _my_unescape(content)
+#End of ResumeXmlHandler()
+
+def _parse_date(data):
+        if data.count('/') ==2:
+                DOB = data.split('/')
+                date_of_birth = '%s-%s-%s'%(DOB[2],DOB[1],DOB[0])
+        else:
+                date_of_birth =''
+        return date_of_birth
+
+class ProfileFieldsSanitizer(file):
+
+        def __init__(self,file):
+                self.invalid_fields = {}
+                self.filename = file
+
+        _NAMEVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 150,
+        }
+
+        _EMAILVALIDATOR = {
+                'type': 'str',
+                'regex': '(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)',
+                'maxlen': 30,
+        }
+        _PHONEVALIDATOR = {
+                'type': 'str',
+                'regex': '^\+?1?\d{9,15}$',
+                'maxlen': 15,
+        }
+        _ADDRVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 128,
+        }
+        _CITYVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 64,
+        }
+        _STATEVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 64,
+        }
+        _PINVALIDATOR = {
+                'type': 'int',
+                'regex': '\d{5,6}',
+                'maxval': 999999,
+                'minval': 0,
+        }
+        _CLAIMEDSKILLVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 8192,
+        }
+        _GENDERVALIDATOR = {
+                'type': 'str',
+                'regex': '[FMO]',
+                'maxlen': 1,
+        }
+        _DOBVALIDATOR = {
+                'type': 'str',
+                'regex': '\d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])',
+                'maxlen': 10,
+        }
+        _LICENSEVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 512,
+        }
+        _SUMMARYVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 4096,
+        }
+        _CTCVALIDATOR = {
+                'type': 'float',
+                'regex': '.*',
+                'maxval': 9999999999.99,
+                'minval': 0,
+        }
+        _NPVALIDATOR = {
+                'type': 'int',
+                'regex': '.*',
+                'maxval': 12,
+                'minval': -1,
+        }
+        _DEGREEVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 16,
+        }
+        _BRANCHVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 32,
+        }
+        _COLLEGEVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 128,
+        }
+        _UNIVERSITYVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 128,
+        }
+        _DEGREEYEARVALIDATOR = {
+                'type': 'int',
+                'regex': '.*',
+                'maxval': 1947,
+                'minval': 2100,
+        }
+        _PERFORMANCEVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 128,
+        }
+        _EMPLOYERVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 64,
+        }
+        _ROLEVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 1024,
+        }
+        _JOBLOCATIONVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 64,
+        }
+        _JOBDATEVALIDATOR = {
+                'type': 'str',
+                'regex': '\d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01])',
+                'maxlen': 10,
+        }
+        _JOBPERIODVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 64,
+        }
+        _JDVALIDATOR = {
+                'type': 'str',
+                'regex': '.*',
+                'maxlen': 8192,
+        }
+
+        _validators = {
+
+                'firstname': _NAMEVALIDATOR,
+                'lastname': _NAMEVALIDATOR,
+                'email': _EMAILVALIDATOR,
+                'phone': _PHONEVALIDATOR,
+                'address': _ADDRVALIDATOR,
+                'address1': _ADDRVALIDATOR,
+                'address2': _ADDRVALIDATOR,
+                'city': _CITYVALIDATOR,
+                'state': _STATEVALIDATOR,
+                'pincode': _PINVALIDATOR,
+                'claimed_skills': _CLAIMEDSKILLVALIDATOR,
+                'gender': _GENDERVALIDATOR,
+                'dateofbirth': _DOBVALIDATOR,
+                'birthdate': _DOBVALIDATOR,
+                'licenseno': _LICENSEVALIDATOR,
+                'dl_number': _LICENSEVALIDATOR,
+                'summary': _SUMMARYVALIDATOR,
+                'annualCtc': _CTCVALIDATOR,
+                'annualctc': _CTCVALIDATOR,
+                'expectedCtc': _CTCVALIDATOR,
+                'expectedctc': _CTCVALIDATOR,
+                'curSalary': _CTCVALIDATOR,
+                'expSalary': _CTCVALIDATOR,
+                'noticePeriod': _NPVALIDATOR,
+                'degree': _DEGREEVALIDATOR,
+                'branch': _BRANCHVALIDATOR,
+                'college': _COLLEGEVALIDATOR,
+                'university': _UNIVERSITYVALIDATOR,
+                'year': _DEGREEYEARVALIDATOR,
+                'joiningYear': _DEGREEYEARVALIDATOR,
+                'graduationYear': _DEGREEYEARVALIDATOR,
+                'performance': _PERFORMANCEVALIDATOR,
+                'aggregate': _PERFORMANCEVALIDATOR,
+                'employer': _EMPLOYERVALIDATOR,
+                'jobprofile': _ROLEVALIDATOR,
+                'joblocation': _JOBLOCATIONVALIDATOR,
+                'startdate': _JOBDATEVALIDATOR,
+                'enddate': _JOBDATEVALIDATOR,
+                'jobperiod': _JOBPERIODVALIDATOR,
+                'jobdescritption': _JDVALIDATOR,
+
+        }
+
+        def _validate(self, validator, key, value):
+                if validator['type'] == 'str':
+                        try:
+                                value = str(value)
+                        except:
+                                self.invalid_fields[key] = value
+                                return 'invalid'
+                if validator['type'] == 'int':
+                        try:
+                                int(value)
+                                value = str(value)
+                        except:
+                                self.invalid_fields[key] = value
+                                return 'invalid'
+                if validator['type'] == 'float':
+                        try:
+                                float(value)
+                                value = str(value)
+                        except:
+                                self.invalid_fields[key] = value
+                                return 'invalid'
+                if not re.match(validator['regex'],value):
+                        self.invalid_fields[key] = value
+                        return 'invalid'
+                if type(value) == 'string':
+                        if validator['maxlen'] < len(value):
+                                self.invalid_fields[key] = value
+                                return 'invalid'
+                elif type(value) in ['int' or 'float']:
+                        if validator['maxval'] < value:
+                                self.invalid_fields[key] = value
+                                return 'invalid'
+                        if validator['minval'] > value:
+                                self.invalid_fields[key] = value
+                                return 'invalid'
+
+                return 'valid'
+
+        def validate(self, name, value):
+
+                validity = 'didnotvalidate'
+
+                if self._validators.has_key(name):
+                        validator = self._validators[name]
+                        validity = self._validate(validator, name, value)
+
+                if validity == 'invalid':
+                        return False
+                else:
+                        return True
+
+        def validate_all_fields(self, dict_in):
+                for k in dict_in.keys():
+                        value = dict_in[k]
+                        if type(value) is not dict:
+                                if not self.validate(k, value):
+                                        dict_in[k] = None
+                        else:
+                                for i in value:
+                                        if not self.validate(i, value[i]):
+                                                dict_in[k][i] = None
+                if self.invalid_fields:
+                        f=open(self.filename,'w')
+                        f.write('Field,Value\r\n')
+                        for field in self.invalid_fields:
+                                try:
+                                        f.write('%s,%s\r\n'%(field,self.invalid_fields[field]))
+                                except:
+                                        f.write('%s\r\n'%(field))
+                        f.close()
+                else:
+                        os.remove(self.filename)
+# End of ProfileFieldsSanitizer()
+
 #Resume parser using RChilli API
 def _resume_parser(content_type,resume_data,err_resp=''):
 
